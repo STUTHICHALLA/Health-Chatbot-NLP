@@ -1,0 +1,26 @@
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+.npm/
+
+# Python
+backend/venv/
+backend/__pycache__/
+backend/.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# PDF extraction
+pdf_content.txt
