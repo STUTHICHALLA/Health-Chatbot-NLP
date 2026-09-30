@@ -1,30 +1,70 @@
 import json
-import nltk
+import os
+import re
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-import os
 
-# Download necessary NLTK data
-nltk.download('punkt', quiet=True)
-nltk.download('punkt_tab', quiet=True)
-nltk.download('stopwords', quiet=True)
-nltk.download('wordnet', quiet=True)
+try:
+    from nltk.corpus import stopwords
+    from nltk.stem import WordNetLemmatizer
+except Exception:
+    stopwords = None
+    WordNetLemmatizer = None
 
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
+FALLBACK_STOPWORDS = {
+    'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are',
+    'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but',
+    'by', 'can', 'did', 'do', 'does', 'doing', 'down', 'during', 'each', 'few', 'for', 'from',
+    'further', 'had', 'has', 'have', 'having', 'he', 'her', 'here', 'hers', 'herself', 'him',
+    'himself', 'his', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'just', 'me',
+    'more', 'most', 'my', 'myself', 'no', 'nor', 'not', 'of', 'off', 'on', 'once', 'only', 'or',
+    'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'she', 'should', 'so',
+    'some', 'such', 'than', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then',
+    'there', 'these', 'they', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up',
+    'very', 'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why',
+    'with', 'you', 'your', 'yours', 'yourself', 'yourselves'
+}
 
 class NLPEngine:
     def __init__(self, data_path="data/dataset.json"):
-        self.lemmatizer = WordNetLemmatizer()
-        self.stop_words = set(stopwords.words('english'))
+        self.lemmatizer = None
+        if WordNetLemmatizer is not None:
+            try:
+                self.lemmatizer = WordNetLemmatizer()
+                self.lemmatizer.lemmatize("tests")
+            except LookupError:
+                self.lemmatizer = None
+
+        try:
+            self.stop_words = set(stopwords.words('english')) if stopwords is not None else FALLBACK_STOPWORDS
+        except LookupError:
+            self.stop_words = FALLBACK_STOPWORDS
         self.vectorizer = TfidfVectorizer()
         
         self.dataset = self.load_data(data_path)
         self.corpus = []
         self.disease_mapping = []
         self.prepare_corpus()
+
+    def lemmatize_word(self, word):
+        if self.lemmatizer is not None:
+            return self.lemmatizer.lemmatize(word)
+
+        if word.endswith("ies") and len(word) > 4:
+            return word[:-3] + "y"
+        if word.endswith("sses"):
+            return word[:-2]
+        if word.endswith("ing") and len(word) > 5:
+            return word[:-3]
+        if word.endswith("ed") and len(word) > 4:
+            return word[:-2]
+        if word.endswith("es") and len(word) > 3 and not word.endswith("ses"):
+            return word[:-2]
+        if word.endswith("s") and len(word) > 3 and not word.endswith("ss"):
+            return word[:-1]
+        return word
 
     def load_data(self, path):
         # Resolve absolute path relative to this script
@@ -34,14 +74,15 @@ class NLPEngine:
             return json.load(f)
 
     def preprocess_text(self, text):
-        # Tokenize and lowercase
-        tokens = word_tokenize(text.lower())
-        # Remove stopwords and non-alphabetic tokens, then lemmatize
-        processed_tokens = [
-            self.lemmatizer.lemmatize(word) 
-            for word in tokens 
-            if word.isalpha() and word not in self.stop_words
-        ]
+        if text is None:
+            return ""
+
+        tokens = re.findall(r"[a-zA-Z]+(?:'[a-zA-Z]+)?", str(text).lower())
+        processed_tokens = []
+        for word in tokens:
+            if word in self.stop_words or not word.isalpha():
+                continue
+            processed_tokens.append(self.lemmatize_word(word))
         return " ".join(processed_tokens)
 
     def prepare_corpus(self):
